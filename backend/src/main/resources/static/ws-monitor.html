@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 旁路监控测试页</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+            padding: 16px;
+        }
+
+        h1, h2 {
+            margin: 0 0 12px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        input, select, textarea, button {
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            padding: 10px 12px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            min-height: 160px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+        }
+
+        button {
+            border: none;
+            cursor: pointer;
+            color: #fff;
+            background: #2563eb;
+            font-weight: 600;
+        }
+
+        button.secondary {
+            background: #475569;
+        }
+
+        .button-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+
+        .status {
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: #e2e8f0;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .logs {
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 460px;
+            padding: 12px;
+            border-radius: 10px;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .sessions {
+            max-height: 420px;
+            overflow: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px;
+            background: #f8fafc;
+        }
+
+        .session-item {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 10px;
+            background: #fff;
+            margin-bottom: 10px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .tips {
+            font-size: 13px;
+            color: #475569;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>WebSocket 旁路监控测试页</h1>
+    <p class="tips">该页面用于观察第三方前端与当前后端的 WebSocket 收发行为，支持查看在线客户端、监听服务端收发日志，以及以“服务器身份”向指定客户端或全部业务客户端主动下发消息。</p>
+
+    <div class="grid">
+        <div class="card">
+            <h2>监控连接</h2>
+            <label for="baseUrl">HTTP Base URL</label>
+            <input id="baseUrl" type="text">
+
+            <label for="wsUrl">监控 WebSocket URL</label>
+            <input id="wsUrl" type="text">
+
+            <label for="userName">X-User-Name</label>
+            <input id="userName" type="text" value="ws-monitor">
+
+            <div id="wsStatus" class="status">监控状态：未连接</div>
+
+            <div class="button-row">
+                <button id="connectBtn">连接并订阅监控</button>
+                <button id="disconnectBtn" class="secondary">断开连接</button>
+                <button id="refreshSessionsBtn" class="secondary">刷新客户端列表</button>
+                <button id="clearLogsBtn" class="secondary">清空日志</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>服务器主动发消息</h2>
+            <label for="targetClientId">目标客户端</label>
+            <select id="targetClientId"></select>
+
+            <label for="messageType">消息类型</label>
+            <input id="messageType" type="text" value="SERVER_OPERATOR_MESSAGE">
+
+            <label for="requestId">Request ID</label>
+            <input id="requestId" type="text" placeholder="为空则由后端自动生成">
+
+            <label for="messagePayload">Payload</label>
+            <textarea id="messagePayload">{
+  "message": "这是一条服务端主动下发的测试消息",
+  "operator": "ws-monitor",
+  "sentAt": 0
+}</textarea>
+
+            <div class="button-row">
+                <button id="sendToClientBtn">发给目标客户端</button>
+                <button id="broadcastBtn">广播到全部业务客户端</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid" style="margin-top: 16px;">
+        <div class="card">
+            <h2>在线客户端</h2>
+            <div id="sessions" class="sessions"></div>
+        </div>
+
+        <div class="card">
+            <h2>监控日志</h2>
+            <div id="logs" class="logs"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const baseUrlInput = document.getElementById('baseUrl');
+    const wsUrlInput = document.getElementById('wsUrl');
+    const userNameInput = document.getElementById('userName');
+    const wsStatus = document.getElementById('wsStatus');
+    const logs = document.getElementById('logs');
+    const sessionsDiv = document.getElementById('sessions');
+    const targetClientSelect = document.getElementById('targetClientId');
+    const messageTypeInput = document.getElementById('messageType');
+    const requestIdInput = document.getElementById('requestId');
+    const messagePayloadInput = document.getElementById('messagePayload');
+
+    const state = {
+        socket: null,
+        lastPingRequestId: '',
+        sessions: []
+    };
+
+    function init() {
+        const origin = window.location.origin || 'http://localhost:8080';
+        const wsOrigin = origin.startsWith('https://')
+            ? origin.replace('https://', 'wss://')
+            : origin.replace('http://', 'ws://');
+        baseUrlInput.value = origin;
+        wsUrlInput.value = `${wsOrigin}/ws/progress`;
+        bindEvents();
+        renderSessions([]);
+        log('SYSTEM', '监控页初始化完成');
+    }
+
+    function bindEvents() {
+        document.getElementById('connectBtn').onclick = connectMonitor;
+        document.getElementById('disconnectBtn').onclick = disconnectMonitor;
+        document.getElementById('refreshSessionsBtn').onclick = loadSessions;
+        document.getElementById('clearLogsBtn').onclick = () => logs.textContent = '';
+        document.getElementById('sendToClientBtn').onclick = () => sendServerMessage(false);
+        document.getElementById('broadcastBtn').onclick = () => sendServerMessage(true);
+    }
+
+    function traceId() {
+        return `trace-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    }
+
+    function log(type, message) {
+        const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        const content = typeof message === 'string' ? message : JSON.stringify(message, null, 2);
+        logs.textContent += `[${time}] [${type}] ${content}\n`;
+        logs.scrollTop = logs.scrollHeight;
+    }
+
+    function updateWsStatus(text) {
+        wsStatus.textContent = `监控状态：${text}`;
+    }
+
+    async function request(method, path, body) {
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Trace-Id': traceId(),
+                'X-User-Name': userNameInput.value || 'ws-monitor'
+            }
+        };
+        if (body !== undefined && method !== 'GET') {
+            options.body = JSON.stringify(body);
+        }
+        const response = await fetch(`${baseUrlInput.value}${path}`, options);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+        return await response.json();
+    }
+
+    function connectMonitor() {
+        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+            log('MONITOR', '监控连接已存在');
+            return;
+        }
+        state.socket = new WebSocket(wsUrlInput.value);
+        updateWsStatus('连接中');
+
+        state.socket.onopen = () => {
+            updateWsStatus('已连接');
+            log('MONITOR', '监控连接成功');
+            sendWs({
+                type: 'CLIENT_MONITOR_SUBSCRIBE',
+                requestId: `monitor-${Date.now()}`,
+                payload: {}
+            });
+            loadSessions();
+        };
+
+        state.socket.onmessage = event => {
+            let message;
+            try {
+                message = JSON.parse(event.data);
+            } catch (error) {
+                log('WS-RAW', event.data);
+                return;
+            }
+
+            if (message.type === 'SERVER_PING') {
+                state.lastPingRequestId = message.requestId;
+                sendWs({
+                    type: 'CLIENT_PONG',
+                    requestId: message.requestId,
+                    payload: {}
+                });
+                return;
+            }
+
+            if (message.type === 'MONITOR_EVENT') {
+                log(`MONITOR-${message.payload?.eventKind || 'EVENT'}`, message.payload);
+                loadSessions();
+                return;
+            }
+
+            log('WS-RECV', message);
+        };
+
+        state.socket.onerror = error => {
+            updateWsStatus('异常');
+            log('WS-ERROR', String(error));
+        };
+
+        state.socket.onclose = () => {
+            updateWsStatus('已断开');
+            log('MONITOR', '监控连接关闭');
+        };
+    }
+
+    function disconnectMonitor() {
+        if (state.socket) {
+            state.socket.close();
+        }
+    }
+
+    function sendWs(payload) {
+        if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+            log('MONITOR', '请先建立监控 WebSocket 连接');
+            return;
+        }
+        state.socket.send(JSON.stringify(payload));
+        log('WS-SEND', payload);
+    }
+
+    async function loadSessions() {
+        try {
+            const result = await request('GET', '/api/v1/ws-debug/sessions');
+            state.sessions = result.data || [];
+            renderSessions(state.sessions);
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    function renderSessions(sessions) {
+        const businessClients = sessions.filter(item => !item.monitorSession);
+        targetClientSelect.innerHTML = '';
+
+        if (!businessClients.length) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = '暂无业务客户端';
+            targetClientSelect.appendChild(option);
+        } else {
+            businessClients.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.clientId;
+                option.textContent = `${item.clientId} | ${item.remoteAddress || 'unknown'}`;
+                targetClientSelect.appendChild(option);
+            });
+        }
+
+        sessionsDiv.innerHTML = '';
+        if (!sessions.length) {
+            sessionsDiv.textContent = '当前无在线 WebSocket 客户端';
+            return;
+        }
+
+        sessions.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'session-item';
+            div.innerHTML = `
+                <div><strong>clientId:</strong> ${escapeHtml(item.clientId || '')}</div>
+                <div><strong>类型:</strong> ${item.monitorSession ? '监控客户端' : '业务客户端'}</div>
+                <div><strong>连接状态:</strong> ${item.open ? 'OPEN' : 'CLOSED'}</div>
+                <div><strong>订阅任务:</strong> ${escapeHtml(item.subscriptionTaskId || '-')}</div>
+                <div><strong>远端地址:</strong> ${escapeHtml(item.remoteAddress || '-')}</div>
+                <div><strong>User-Agent:</strong> ${escapeHtml(item.userAgent || '-')}</div>
+                <div><strong>连接时间:</strong> ${formatTime(item.connectedAt)}</div>
+                <div><strong>最近活跃:</strong> ${formatTime(item.lastSeenAt)}</div>
+            `;
+            sessionsDiv.appendChild(div);
+        });
+    }
+
+    async function sendServerMessage(broadcast) {
+        try {
+            const payload = messagePayloadInput.value.trim()
+                ? JSON.parse(messagePayloadInput.value)
+                : {};
+            payload.sentAt = Date.now();
+            const body = {
+                broadcast,
+                clientId: broadcast ? null : targetClientSelect.value,
+                type: messageTypeInput.value,
+                requestId: requestIdInput.value || null,
+                payload
+            };
+            const result = await request('POST', '/api/v1/ws-debug/send', body);
+            log('SERVER-SEND', result.data);
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    function formatTime(value) {
+        if (!value) {
+            return '-';
+        }
+        return new Date(value).toLocaleString('zh-CN', { hour12: false });
+    }
+
+    function escapeHtml(text) {
+        return text
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    init();
+</script>
+</body>
+</html>

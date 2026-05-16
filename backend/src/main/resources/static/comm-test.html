@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后端通讯测试脚本</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: #f5f7fb;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1, h2 {
+            margin: 0 0 12px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+            padding: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        input, select, textarea, button {
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            padding: 10px 12px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            min-height: 130px;
+            resize: vertical;
+            font-family: Consolas, monospace;
+        }
+
+        button {
+            background: #2563eb;
+            color: #fff;
+            cursor: pointer;
+            border: none;
+            font-weight: 600;
+        }
+
+        button.secondary {
+            background: #475569;
+        }
+
+        button.danger {
+            background: #dc2626;
+        }
+
+        .button-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .logs {
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 420px;
+            padding: 12px;
+            border-radius: 10px;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-family: Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .status {
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: #e2e8f0;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .tips {
+            font-size: 13px;
+            color: #475569;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>多模态后端通讯测试脚本</h1>
+    <p class="tips">该页面由后端静态资源直接提供，用于联调 REST + WebSocket。既可以主动发消息，也可以实时显示服务端推送消息，并自动响应心跳 pong。</p>
+
+    <div class="grid">
+        <div class="card">
+            <h2>连接配置</h2>
+            <label for="baseUrl">HTTP Base URL</label>
+            <input id="baseUrl" type="text">
+
+            <label for="wsUrl">WebSocket URL</label>
+            <input id="wsUrl" type="text">
+
+            <label for="userName">X-User-Name</label>
+            <input id="userName" type="text" value="comm-tester">
+
+            <div id="wsStatus" class="status">WebSocket 状态：未连接</div>
+
+            <div class="button-row">
+                <button id="connectWsBtn">连接 WS</button>
+                <button id="disconnectWsBtn" class="secondary">断开 WS</button>
+                <button id="clearLogsBtn" class="secondary">清空日志</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>快捷联调</h2>
+            <div class="button-row">
+                <button id="healthBtn">健康检查</button>
+                <button id="modelsBtn">查询模型</button>
+                <button id="metricsBtn">资源快照</button>
+                <button id="alertsBtn">告警列表</button>
+                <button id="mockLoginBtn">模拟登录</button>
+            </div>
+
+            <label for="taskId">任务 ID</label>
+            <input id="taskId" type="text" placeholder="创建任务后会自动回填">
+
+            <label for="datasetId">数据集 ID</label>
+            <input id="datasetId" type="text" placeholder="注册数据集后会自动回填">
+
+            <label for="controlAction">任务控制动作</label>
+            <select id="controlAction">
+                <option value="PAUSE">PAUSE</option>
+                <option value="RESUME">RESUME</option>
+                <option value="RERUN">RERUN</option>
+                <option value="TERMINATE">TERMINATE</option>
+            </select>
+
+            <div class="button-row">
+                <button id="createTaskBtn">创建任务</button>
+                <button id="subscribeBtn">订阅任务</button>
+                <button id="startTaskBtn">启动任务</button>
+                <button id="controlTaskBtn">控制任务</button>
+                <button id="inferenceBtn">模型推理</button>
+                <button id="datasetBtn">注册数据集</button>
+                <button id="pipelineBtn">运行流水线</button>
+                <button id="reportBtn">查询报告</button>
+                <button id="exportJsonBtn">导出 JSON</button>
+                <button id="exportCsvBtn">导出 CSV</button>
+                <button id="exportXmlBtn">导出 XML</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid" style="margin-top: 16px;">
+        <div class="card">
+            <h2>HTTP 请求体编辑</h2>
+            <label for="httpMethod">Method</label>
+            <select id="httpMethod">
+                <option>GET</option>
+                <option>POST</option>
+            </select>
+
+            <label for="httpPath">Path</label>
+            <input id="httpPath" type="text" value="/api/v1/system/health">
+
+            <label for="httpBody">Body</label>
+            <textarea id="httpBody">{
+  "taskName": "多模态联调任务",
+  "scenarioDescription": "测试前后端通讯与推送",
+  "nodes": [
+    {
+      "nodeId": "data-access",
+      "nodeName": "数据接入",
+      "nodeType": "DATA",
+      "priority": 1,
+      "resourceRatio": 0.2,
+      "parameters": {
+        "sourceType": "image"
+      }
+    },
+    {
+      "nodeId": "model-invoke",
+      "nodeName": "模型调用",
+      "nodeType": "MODEL",
+      "priority": 2,
+      "resourceRatio": 0.5,
+      "parameters": {
+        "modelId": "yolov8-demo"
+      }
+    },
+    {
+      "nodeId": "report-export",
+      "nodeName": "报告导出",
+      "nodeType": "REPORT",
+      "priority": 3,
+      "resourceRatio": 0.1,
+      "parameters": {
+        "format": "JSON"
+      }
+    }
+  ]
+}</textarea>
+            <button id="sendHttpBtn">发送 HTTP 请求</button>
+        </div>
+
+        <div class="card">
+            <h2>WebSocket 发消息</h2>
+            <label for="wsBody">消息体</label>
+            <textarea id="wsBody">{
+  "type": "CLIENT_SUBSCRIBE",
+  "requestId": "req-demo-001",
+  "payload": {
+    "taskId": "在上方填写任务ID后再发送"
+  }
+}</textarea>
+            <div class="button-row">
+                <button id="sendWsBtn">发送 WS 消息</button>
+                <button id="sendPongBtn" class="secondary">手工发送 PONG</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <h2>通讯日志</h2>
+        <div id="logs" class="logs"></div>
+    </div>
+</div>
+
+<script>
+    const baseUrlInput = document.getElementById('baseUrl');
+    const wsUrlInput = document.getElementById('wsUrl');
+    const userNameInput = document.getElementById('userName');
+    const wsStatus = document.getElementById('wsStatus');
+    const logs = document.getElementById('logs');
+    const taskIdInput = document.getElementById('taskId');
+    const datasetIdInput = document.getElementById('datasetId');
+    const controlActionInput = document.getElementById('controlAction');
+    const httpMethodInput = document.getElementById('httpMethod');
+    const httpPathInput = document.getElementById('httpPath');
+    const httpBodyInput = document.getElementById('httpBody');
+    const wsBodyInput = document.getElementById('wsBody');
+
+    const state = {
+        socket: null,
+        lastTaskId: '',
+        lastDatasetId: '',
+        lastPingRequestId: ''
+    };
+
+    function init() {
+        const origin = window.location.origin || 'http://localhost:8080';
+        const wsOrigin = origin.startsWith('https://')
+            ? origin.replace('https://', 'wss://')
+            : origin.replace('http://', 'ws://');
+        baseUrlInput.value = origin;
+        wsUrlInput.value = `${wsOrigin}/ws/progress`;
+        bindEvents();
+        log('SYSTEM', '页面初始化完成');
+    }
+
+    function bindEvents() {
+        document.getElementById('connectWsBtn').onclick = connectWs;
+        document.getElementById('disconnectWsBtn').onclick = disconnectWs;
+        document.getElementById('clearLogsBtn').onclick = () => logs.textContent = '';
+        document.getElementById('healthBtn').onclick = () => quickGet('/api/v1/system/health');
+        document.getElementById('modelsBtn').onclick = () => quickGet('/api/v1/models');
+        document.getElementById('metricsBtn').onclick = () => quickGet('/api/v1/monitor/metrics');
+        document.getElementById('alertsBtn').onclick = () => quickGet('/api/v1/monitor/alerts');
+        document.getElementById('mockLoginBtn').onclick = mockLogin;
+        document.getElementById('createTaskBtn').onclick = createTask;
+        document.getElementById('subscribeBtn').onclick = subscribeTask;
+        document.getElementById('startTaskBtn').onclick = startTask;
+        document.getElementById('controlTaskBtn').onclick = controlTask;
+        document.getElementById('inferenceBtn').onclick = runInference;
+        document.getElementById('datasetBtn').onclick = registerDataset;
+        document.getElementById('pipelineBtn').onclick = runPipeline;
+        document.getElementById('reportBtn').onclick = getReport;
+        document.getElementById('exportJsonBtn').onclick = () => exportReport('JSON');
+        document.getElementById('exportCsvBtn').onclick = () => exportReport('CSV');
+        document.getElementById('exportXmlBtn').onclick = () => exportReport('XML');
+        document.getElementById('sendHttpBtn').onclick = sendCustomHttp;
+        document.getElementById('sendWsBtn').onclick = sendCustomWs;
+        document.getElementById('sendPongBtn').onclick = () => sendWs({
+            type: 'CLIENT_PONG',
+            requestId: state.lastPingRequestId || `manual-pong-${Date.now()}`,
+            payload: {}
+        });
+    }
+
+    function log(type, message) {
+        const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        const content = typeof message === 'string' ? message : JSON.stringify(message, null, 2);
+        logs.textContent += `[${time}] [${type}] ${content}\n`;
+        logs.scrollTop = logs.scrollHeight;
+    }
+
+    function updateWsStatus(text) {
+        wsStatus.textContent = `WebSocket 状态：${text}`;
+    }
+
+    function traceId() {
+        return `trace-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    }
+
+    async function request(method, path, body) {
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Trace-Id': traceId(),
+            'X-User-Name': userNameInput.value || 'comm-tester'
+        };
+
+        const options = { method, headers };
+        if (body !== undefined && method !== 'GET') {
+            options.body = JSON.stringify(body);
+        }
+
+        const url = `${baseUrlInput.value}${path}`;
+        log('HTTP-REQ', { method, url, body });
+
+        const response = await fetch(url, options);
+        const contentType = response.headers.get('content-type') || '';
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status}: ${text}`);
+        }
+        if (contentType.includes('application/json')) {
+            const json = await response.json();
+            log('HTTP-RESP', json);
+            return json;
+        }
+        const blob = await response.blob();
+        log('HTTP-RESP', `binary response: ${blob.type}, ${blob.size} bytes`);
+        return blob;
+    }
+
+    function connectWs() {
+        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+            log('WS', '连接已存在');
+            return;
+        }
+        state.socket = new WebSocket(wsUrlInput.value);
+        updateWsStatus('连接中');
+
+        state.socket.onopen = () => {
+            updateWsStatus('已连接');
+            log('WS', '连接成功');
+        };
+
+        state.socket.onmessage = event => {
+            let message;
+            try {
+                message = JSON.parse(event.data);
+            } catch (error) {
+                log('WS-RECV', event.data);
+                return;
+            }
+            log('WS-RECV', message);
+            if (message.type === 'SERVER_PING') {
+                state.lastPingRequestId = message.requestId;
+                sendWs({
+                    type: 'CLIENT_PONG',
+                    requestId: message.requestId,
+                    payload: {}
+                });
+            }
+        };
+
+        state.socket.onerror = error => {
+            updateWsStatus('异常');
+            log('WS-ERROR', String(error));
+        };
+
+        state.socket.onclose = () => {
+            updateWsStatus('已断开');
+            log('WS', '连接关闭');
+        };
+    }
+
+    function disconnectWs() {
+        if (state.socket) {
+            state.socket.close();
+        }
+    }
+
+    function sendWs(payload) {
+        if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+            log('WS', '请先连接 WebSocket');
+            return;
+        }
+        state.socket.send(JSON.stringify(payload));
+        log('WS-SEND', payload);
+    }
+
+    async function quickGet(path) {
+        try {
+            return await request('GET', path);
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function createTask() {
+        try {
+            const payload = {
+                taskName: '多模态联调任务-' + Date.now(),
+                scenarioDescription: '测试 REST + WebSocket 实时通讯',
+                nodes: [
+                    {
+                        nodeId: 'data-access',
+                        nodeName: '数据接入',
+                        nodeType: 'DATA',
+                        priority: 1,
+                        resourceRatio: 0.2,
+                        parameters: { sourceType: 'image' }
+                    },
+                    {
+                        nodeId: 'model-invoke',
+                        nodeName: '模型调用',
+                        nodeType: 'MODEL',
+                        priority: 2,
+                        resourceRatio: 0.5,
+                        parameters: { modelId: 'yolov8-demo' }
+                    },
+                    {
+                        nodeId: 'report-export',
+                        nodeName: '报告导出',
+                        nodeType: 'REPORT',
+                        priority: 3,
+                        resourceRatio: 0.1,
+                        parameters: { format: 'JSON' }
+                    }
+                ]
+            };
+            const result = await request('POST', '/api/v1/tasks', payload);
+            const taskId = result?.data?.taskId || '';
+            state.lastTaskId = taskId;
+            taskIdInput.value = taskId;
+            wsBodyInput.value = JSON.stringify({
+                type: 'CLIENT_SUBSCRIBE',
+                requestId: `req-${Date.now()}`,
+                payload: { taskId }
+            }, null, 2);
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    function subscribeTask() {
+        const taskId = taskIdInput.value || state.lastTaskId;
+        sendWs({
+            type: 'CLIENT_SUBSCRIBE',
+            requestId: `req-${Date.now()}`,
+            payload: { taskId }
+        });
+    }
+
+    async function startTask() {
+        const taskId = taskIdInput.value || state.lastTaskId;
+        if (!taskId) {
+            log('ERROR', '请先创建任务或输入任务ID');
+            return;
+        }
+        try {
+            await request('POST', `/api/v1/tasks/${taskId}/start`, {});
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function controlTask() {
+        const taskId = taskIdInput.value || state.lastTaskId;
+        if (!taskId) {
+            log('ERROR', '请先输入任务ID');
+            return;
+        }
+        try {
+            await request('POST', `/api/v1/tasks/${taskId}/control`, {
+                action: controlActionInput.value
+            });
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function runInference() {
+        try {
+            await request('POST', '/api/v1/inference/run', {
+                modelId: 'yolov8-demo',
+                modality: 'image',
+                inputs: [
+                    {
+                        inputId: `image-${Date.now()}`,
+                        sourceUri: 'samples/car.png',
+                        attributes: { scene: 'factory' }
+                    }
+                ],
+                requestedMetrics: ['mAP', 'Precision', 'Recall'],
+                options: { batchSize: 1 }
+            });
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function registerDataset() {
+        try {
+            const result = await request('POST', '/api/v1/data/datasets/register', {
+                datasetName: `联调数据集-${Date.now()}`,
+                assets: [
+                    {
+                        assetId: `asset-${Date.now()}`,
+                        uri: 'samples/audio.wav',
+                        modality: 'audio',
+                        tags: ['speech', 'test']
+                    }
+                ],
+                filterRules: { source: 'manual-test' }
+            });
+            const datasetId = result?.data?.datasetId || '';
+            state.lastDatasetId = datasetId;
+            datasetIdInput.value = datasetId;
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function runPipeline() {
+        const datasetId = datasetIdInput.value || state.lastDatasetId;
+        if (!datasetId) {
+            log('ERROR', '请先注册数据集或输入数据集ID');
+            return;
+        }
+        try {
+            await request('POST', '/api/v1/data/pipelines/run', {
+                datasetId,
+                operations: [
+                    { operation: 'normalize', parameters: { scale: '0-1' } },
+                    { operation: 'augment.cutmix', parameters: { ratio: 0.3 } }
+                ]
+            });
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function getReport() {
+        const taskId = taskIdInput.value || state.lastTaskId;
+        if (!taskId) {
+            log('ERROR', '请先输入任务ID');
+            return;
+        }
+        try {
+            await request('GET', `/api/v1/reports/${taskId}`);
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function exportReport(format) {
+        const taskId = taskIdInput.value || state.lastTaskId;
+        if (!taskId) {
+            log('ERROR', '请先输入任务ID');
+            return;
+        }
+        try {
+            const response = await fetch(`${baseUrlInput.value}/api/v1/reports/${taskId}/export?format=${format}`, {
+                headers: {
+                    'X-Trace-Id': traceId(),
+                    'X-User-Name': userNameInput.value || 'comm-tester'
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`导出失败: HTTP ${response.status}`);
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${taskId}.${format.toLowerCase()}`;
+            link.click();
+            URL.revokeObjectURL(url);
+            log('EXPORT', `${format} 导出成功`);
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function mockLogin() {
+        try {
+            await request('POST', '/api/v1/users/mock-login', {
+                username: userNameInput.value || 'comm-tester',
+                module: 'comm-test',
+                ip: '127.0.0.1'
+            });
+            await request('GET', '/api/v1/users/login-summary');
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    async function sendCustomHttp() {
+        try {
+            const method = httpMethodInput.value;
+            const path = httpPathInput.value;
+            const bodyText = httpBodyInput.value.trim();
+            const body = method === 'GET' || !bodyText ? undefined : JSON.parse(bodyText);
+            await request(method, path, body);
+        } catch (error) {
+            log('ERROR', error.message);
+        }
+    }
+
+    function sendCustomWs() {
+        try {
+            const payload = JSON.parse(wsBodyInput.value);
+            sendWs(payload);
+        } catch (error) {
+            log('ERROR', `WS JSON 解析失败: ${error.message}`);
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
