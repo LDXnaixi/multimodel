@@ -108,7 +108,7 @@ function statusClass(status: string) {
 async function loadTasks() {
   try {
     const res = await getTasks()
-    taskStore.setTasks(res.data as any[])
+    taskStore.setTasks(res as any[])
   } catch (e) {
     console.error('获取任务列表失败', e)
   }
@@ -136,7 +136,7 @@ async function submitCreate() {
       scenarioDescription: form.value.scenarioDescription,
       nodes
     })
-    alert(`任务创建成功: ${(res.data as any).taskId}`)
+    alert(`任务创建成功: ${(res as any).taskId}`)
     showCreate.value = false
     loadTasks()
   } catch (e) {

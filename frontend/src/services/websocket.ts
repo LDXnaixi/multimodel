@@ -82,7 +82,7 @@ class WebSocketService {
         break
       }
       case 'TASK_PROGRESS': {
-        taskStore.updateTaskProgress(message.payload as Record<string, unknown>)
+        taskStore.updateTaskProgress(message.payload as any)
         break
       }
       case 'MODEL_RESULT': {
@@ -94,11 +94,11 @@ class WebSocketService {
         break
       }
       case 'RESOURCE_METRIC': {
-        appStore.setLatestMetric(message.payload as Record<string, unknown>)
+        appStore.setLatestMetric(message.payload as any)
         break
       }
       case 'RESOURCE_ALERT': {
-        appStore.addAlert(message.payload as Record<string, unknown>)
+        appStore.addAlert(message.payload as any)
         break
       }
       default: {

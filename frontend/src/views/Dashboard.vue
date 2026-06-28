@@ -99,7 +99,7 @@ function formatTime(ts: number): string {
 async function fetchHealth() {
   try {
     const res = await getHealth()
-    health.value = res.data
+    health.value = res
   } catch (e) {
     console.error('获取健康状态失败', e)
   }

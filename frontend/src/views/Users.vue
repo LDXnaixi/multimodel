@@ -61,8 +61,8 @@ async function login() {
 async function loadData() {
   try {
     const [sRes, sumRes] = await Promise.all([getLoginStats(), getLoginSummary()])
-    stats.value = sRes.data
-    summary.value = sumRes.data
+    stats.value = sRes
+    summary.value = sumRes
   } catch (e) {
     console.error('加载统计失败', e)
   }

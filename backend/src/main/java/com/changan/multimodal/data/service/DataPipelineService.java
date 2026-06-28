@@ -1,28 +1,23 @@
 package com.changan.multimodal.data.service;
 
-import com.changan.multimodal.data.dto.DataAsset;
-import com.changan.multimodal.data.dto.DataIngestRequest;
-import com.changan.multimodal.data.dto.DataIngestResponse;
-import com.changan.multimodal.data.dto.DataPipelineOperation;
-import com.changan.multimodal.data.dto.DataPipelineRequest;
-import com.changan.multimodal.data.dto.DataPipelineResponse;
+import com.changan.multimodal.data.dto.*;
 import com.changan.multimodal.realtime.dto.WsMessageType;
 import com.changan.multimodal.realtime.service.WsMessageRouter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class DataPipelineService {
 
     private final Map<String, DataIngestResponse> datasetStore = new ConcurrentHashMap<>();
+    private final Map<String, Sample> sampleStore = new ConcurrentHashMap<>();
+    private final Map<String, DataSource> dataSourceStore = new ConcurrentHashMap<>();
     private final WsMessageRouter wsMessageRouter;
 
     public DataIngestResponse registerDataset(DataIngestRequest request) {
@@ -70,6 +65,81 @@ public class DataPipelineService {
                 "status", "COMPLETED"
         ));
         return response;
+    }
+
+    public List<DataSource> listDataSources() {
+        return new ArrayList<>(dataSourceStore.values());
+    }
+
+    public DataSource addDataSource(DataSource dataSource) {
+        dataSource.setSourceId(UUID.randomUUID().toString().replace("-", ""));
+        dataSource.setConnectedAt(Instant.now());
+        dataSource.setStatus("CONNECTED");
+        dataSourceStore.put(dataSource.getSourceId(), dataSource);
+        return dataSource;
+    }
+
+    public List<Sample> searchSamples(SampleSearchRequest request) {
+        return sampleStore.values().stream()
+                .filter(sample -> request.getKeyword() == null || 
+                                 sample.getName().contains(request.getKeyword()))
+                .filter(sample -> request.getDataType() == null || 
+                                 sample.getDataType().equals(request.getDataType()))
+                .filter(sample -> request.getTags() == null || request.getTags().isEmpty() ||
+                                 sample.getTags().stream().anyMatch(tag -> request.getTags().contains(tag)))
+                .collect(Collectors.toList());
+    }
+
+    public Sample addSample(Sample sample) {
+        sample.setSampleId(UUID.randomUUID().toString().replace("-", ""));
+        sample.setCreatedAt(Instant.now());
+        sample.setUpdatedAt(Instant.now());
+        sample.setVersion("v1");
+        sampleStore.put(sample.getSampleId(), sample);
+        return sample;
+    }
+
+    public DataProcessingResponse processData(DataProcessingRequest request) {
+        String taskId = UUID.randomUUID().toString().replace("-", "");
+        List<String> processedIds = new ArrayList<>();
+        processedIds.add(request.getSampleId() + "_processed");
+        
+        Map<String, Object> results = new HashMap<>();
+        results.put("taskId", taskId);
+        results.put("originalSampleId", request.getSampleId());
+        
+        return DataProcessingResponse.builder()
+                .taskId(taskId)
+                .status("COMPLETED")
+                .processedSampleIds(processedIds)
+                .results(results)
+                .build();
+    }
+
+    public List<String> augmentData(DataAugmentationRequest request) {
+        List<String> augmentedIds = new ArrayList<>();
+        for (int i = 0; i < request.getAugmentationFactor(); i++) {
+            for (String sampleId : request.getSampleIds()) {
+                String newId = sampleId + "_aug_" + i;
+                augmentedIds.add(newId);
+            }
+        }
+        return augmentedIds;
+    }
+
+    public List<String> fuseData(DataFusionRequest request) {
+        List<String> fusedIds = new ArrayList<>();
+        String fusedId = "fused_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        fusedIds.add(fusedId);
+        return fusedIds;
+    }
+
+    public List<String> generateScenario(ScenarioGenerationRequest request) {
+        List<String> generatedIds = new ArrayList<>();
+        for (int i = 0; i < request.getTargetCount(); i++) {
+            generatedIds.add("scenario_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
+        }
+        return generatedIds;
     }
 
     private String inferModality(String uri) {

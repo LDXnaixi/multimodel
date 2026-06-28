@@ -76,7 +76,7 @@ const thresholds = ref({
 async function loadMetrics() {
   try {
     const res = await getMetrics()
-    const data = res.data as Record<string, unknown>
+    const data = res as Record<string, unknown>
     if (data.cpuUsageThreshold) thresholds.value.cpuUsageThreshold = data.cpuUsageThreshold as number
     if (data.memoryUsageThreshold) thresholds.value.memoryUsageThreshold = data.memoryUsageThreshold as number
   } catch (e) {
@@ -87,7 +87,7 @@ async function loadMetrics() {
 async function loadAlerts() {
   try {
     const res = await getAlerts()
-    const list = (res.data as any)?.alerts || []
+    const list = (res as any)?.alerts || []
     list.forEach((a: any) => appStore.addAlert(a))
   } catch (e) {
     console.error('获取告警失败', e)

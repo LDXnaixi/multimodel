@@ -94,7 +94,7 @@ function statusClass(status: string) {
 async function loadTask() {
   try {
     const res = await getTask(taskId)
-    taskStore.setCurrentTask(res.data as any)
+    taskStore.setCurrentTask(res as any)
   } catch (e) {
     console.error('获取任务详情失败', e)
   }

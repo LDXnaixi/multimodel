@@ -5,6 +5,8 @@ import com.changan.multimodal.inference.dto.InferenceInput;
 import com.changan.multimodal.inference.dto.InferenceOutput;
 import com.changan.multimodal.inference.dto.InferenceRequest;
 import com.changan.multimodal.inference.dto.InferenceResponse;
+import com.changan.multimodal.model.dto.ModelDescriptor;
+import com.changan.multimodal.model.service.ModelRegistryService;
 import com.changan.multimodal.realtime.dto.WsMessageType;
 import com.changan.multimodal.realtime.service.WsMessageRouter;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -21,14 +24,19 @@ import java.util.UUID;
 public class ModelInferenceService {
 
     private final WsMessageRouter wsMessageRouter;
+    private final ModelRegistryService modelRegistryService;
 
     public InferenceResponse runInference(InferenceRequest request) {
         long startedAt = Instant.now().toEpochMilli();
         String jobId = UUID.randomUUID().toString().replace("-", "");
+        
+        ModelDescriptor model = findModel(request.getModelId());
         List<InferenceOutput> outputs = request.getInputs().stream()
-                .map(this::mockOutput)
+                .map(input -> mockOutput(input, model))
                 .toList();
-        List<EvaluationMetric> metrics = buildMetrics(request.getRequestedMetrics(), outputs);
+        
+        List<EvaluationMetric> metrics = buildMetrics(model, outputs);
+        
         InferenceResponse response = InferenceResponse.builder()
                 .jobId(jobId)
                 .modelId(request.getModelId())
@@ -38,6 +46,7 @@ public class ModelInferenceService {
                 .metrics(metrics)
                 .status("COMPLETED")
                 .build();
+        
         wsMessageRouter.broadcast(WsMessageType.MODEL_RESULT, Map.of(
                 "jobId", jobId,
                 "modelId", request.getModelId(),
@@ -46,58 +55,143 @@ public class ModelInferenceService {
                 "startedAt", startedAt,
                 "status", "COMPLETED"
         ));
+        
         return response;
     }
 
-    private InferenceOutput mockOutput(InferenceInput input) {
+    private ModelDescriptor findModel(String modelId) {
+        return modelRegistryService.listModels().stream()
+                .filter(m -> m.getModelId().equals(modelId))
+                .findFirst()
+                .orElse(ModelDescriptor.builder()
+                        .modelId(modelId)
+                        .modelCategory("UNCLASSIFIED")
+                        .availableMetrics(List.of("mAP", "Precision", "Recall"))
+                        .build());
+    }
+
+    private InferenceOutput mockOutput(InferenceInput input, ModelDescriptor model) {
+        Map<String, Object> extra = new HashMap<>();
+        extra.put("sourceUri", input.getSourceUri());
+        extra.put("modelCategory", model.getModelCategory());
+        
+        String label = switch (model.getModelCategory()) {
+            case "OBJECT_DETECTION" -> "object.detected";
+            case "OCR" -> "text.recognized";
+            case "IMAGE_CLASSIFICATION" -> "image.classified";
+            case "SEMANTIC_ANALYSIS" -> "text.analyzed";
+            case "SPEECH_RECOGNITION" -> "speech.transcript";
+            case "VISION_LANGUAGE" -> "vl.answered";
+            case "CUSTOM" -> "custom.output";
+            default -> "unknown.output";
+        };
+
+        if ("SPEECH_RECOGNITION".equals(model.getModelCategory())) {
+            extra.put("transcript", "这是一个模拟的语音转录文本，支持多语言输出。");
+        } else if ("VISION_LANGUAGE".equals(model.getModelCategory())) {
+            extra.put("answer", "这是根据输入图片生成的描述性回答。");
+        }
+
         double confidence = 0.72 + Math.abs(input.getInputId().hashCode() % 20) / 100.0;
         confidence = Math.min(confidence, 0.96);
+        
+        extra.put("rawAttributes", input.getAttributes() == null ? Map.<String, Object>of() : input.getAttributes());
+        
         return InferenceOutput.builder()
                 .inputId(input.getInputId())
-                .label(resolveLabel(input.getSourceUri()))
+                .label(label)
                 .confidence(confidence)
-                .extra(Map.of(
-                        "sourceUri", input.getSourceUri(),
-                        "todo", "后续替换为真实模型服务RPC/HTTP调用",
-                        "rawAttributes", input.getAttributes() == null ? Map.<String, Object>of() : input.getAttributes()
-                ))
+                .extra(extra)
                 .build();
     }
 
-    private String resolveLabel(String sourceUri) {
-        String lower = sourceUri.toLowerCase();
-        if (lower.endsWith(".wav") || lower.endsWith(".mp3") || lower.endsWith(".flac")) {
-            return "speech.transcript";
+    private List<EvaluationMetric> buildMetrics(ModelDescriptor model, List<InferenceOutput> outputs) {
+        List<String> availableMetrics = model.getAvailableMetrics();
+        if (availableMetrics == null || availableMetrics.isEmpty()) {
+            availableMetrics = List.of("mAP", "Precision", "Recall");
         }
-        if (lower.endsWith(".txt") || lower.endsWith(".json") || lower.endsWith(".csv")) {
-            return "text.semantic";
-        }
-        return "vision.detected";
-    }
-
-    private List<EvaluationMetric> buildMetrics(List<String> requestedMetrics, List<InferenceOutput> outputs) {
-        List<String> metrics = requestedMetrics == null || requestedMetrics.isEmpty()
-                ? List.of("mAP", "Precision", "Recall")
-                : requestedMetrics;
+        
         double avgConfidence = outputs.stream().mapToDouble(InferenceOutput::getConfidence).average().orElse(0.8);
         List<EvaluationMetric> result = new ArrayList<>();
-        for (String metric : metrics) {
+        
+        for (String metric : availableMetrics) {
             String normalized = metric.toLowerCase();
-            double value = switch (normalized) {
-                case "map" -> avgConfidence - 0.03;
-                case "precision" -> avgConfidence;
-                case "recall" -> Math.max(0.6, avgConfidence - 0.05);
-                case "accuracy" -> avgConfidence + 0.01;
-                case "latency" -> 120.0;
-                default -> avgConfidence;
-            };
+            double value = calculateMetricValue(normalized, model.getModelCategory(), avgConfidence);
+            String unit = "latency".equals(normalized) || "fps".equals(normalized) || "wer".equals(normalized) || "cer".equals(normalized) ? (
+                    "fps".equals(normalized) ? "fps" : 
+                    "latency".equals(normalized) ? "ms" : 
+                    "ratio"
+            ) : "ratio";
+            
+            String description = getMetricDescription(metric, model.getModelCategory());
+            
             result.add(EvaluationMetric.builder()
                     .name(metric)
                     .value(Math.round(value * 10000.0) / 10000.0)
-                    .unit("latency".equals(normalized) ? "ms" : "ratio")
-                    .description("统一评测协议输出，可替换为真实模型评测结果")
+                    .unit(unit)
+                    .description(description)
                     .build());
         }
+        
         return result;
+    }
+
+    private double calculateMetricValue(String metric, String category, double baseConfidence) {
+        return switch (metric) {
+            case "map" -> baseConfidence - 0.03 + getCategoryOffset(category);
+            case "precision" -> baseConfidence + getCategoryOffset(category);
+            case "recall" -> Math.max(0.6, baseConfidence - 0.05 + getCategoryOffset(category));
+            case "fps" -> 15.0 + Math.random() * 20.0;
+            case "accuracy" -> baseConfidence + 0.01 + getCategoryOffset(category);
+            case "top1-accuracy" -> baseConfidence + 0.02;
+            case "top5-accuracy" -> baseConfidence + 0.08;
+            case "f1-score" -> (2 * baseConfidence * baseConfidence) / (baseConfidence + baseConfidence);
+            case "perplexity" -> 15.0 + Math.random() * 10.0;
+            case "wer", "cer" -> 0.15 - Math.random() * 0.1;
+            case "recognitionrate" -> baseConfidence + 0.05;
+            case "rejectionrate" -> 0.05 + Math.random() * 0.1;
+            case "bleu", "rouge" -> 0.6 + Math.random() * 0.3;
+            case "relevance" -> 0.7 + Math.random() * 0.25;
+            case "latency" -> 50.0 + Math.random() * 100.0;
+            case "throughput" -> 100.0 + Math.random() * 200.0;
+            default -> baseConfidence;
+        };
+    }
+
+    private double getCategoryOffset(String category) {
+        return switch (category) {
+            case "OBJECT_DETECTION" -> 0.02;
+            case "OCR" -> 0.03;
+            case "IMAGE_CLASSIFICATION" -> 0.04;
+            case "SEMANTIC_ANALYSIS" -> 0.01;
+            case "SPEECH_RECOGNITION" -> -0.02;
+            case "VISION_LANGUAGE" -> -0.03;
+            case "CUSTOM" -> 0.0;
+            default -> 0.0;
+        };
+    }
+
+    private String getMetricDescription(String metric, String category) {
+        return switch (metric.toLowerCase()) {
+            case "map" -> category + " 模型的平均精度均值";
+            case "precision" -> category + " 模型的精确率";
+            case "recall" -> category + " 模型的召回率";
+            case "fps" -> "每秒处理帧数";
+            case "accuracy" -> category + " 模型的整体准确率";
+            case "top1-accuracy" -> "Top-1 准确率";
+            case "top5-accuracy" -> "Top-5 准确率";
+            case "f1-score" -> "F1 综合评分";
+            case "perplexity" -> "语言模型困惑度";
+            case "wer" -> "词错误率";
+            case "cer" -> "字符错误率";
+            case "recognitionrate" -> "文本识别率";
+            case "rejectionrate" -> "文本拒识率";
+            case "bleu" -> "BLEU 翻译质量评分";
+            case "rouge" -> "ROUGE 文本相似度评分";
+            case "relevance" -> "回答相关性评分";
+            case "latency" -> "平均推理延迟";
+            case "throughput" -> "系统吞吐量";
+            default -> category + " 模型评测指标";
+        };
     }
 }

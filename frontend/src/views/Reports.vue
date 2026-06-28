@@ -32,7 +32,7 @@ async function query() {
   if (!taskId.value) return
   try {
     const res = await getReport(taskId.value)
-    report.value = res.data
+    report.value = res
   } catch (e) {
     alert('查询失败')
   }
@@ -45,7 +45,7 @@ async function exportReport(format: string) {
   }
   try {
     const res = await apiExportReport(taskId.value, format)
-    const blob = new Blob([res.data as BlobPart])
+    const blob = new Blob([res as unknown as BlobPart])
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

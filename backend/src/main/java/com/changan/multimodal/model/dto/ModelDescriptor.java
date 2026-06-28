@@ -16,4 +16,9 @@ public class ModelDescriptor {
     private final String deploymentStatus;
     private final List<String> supportedModalities;
     private final String todo;
+    private final Integer invocationCount;
+    private final Double averageLatency;
+    private final String modelCategory;
+    private final List<String> availableMetrics;
+    private final Boolean isCustom;
 }

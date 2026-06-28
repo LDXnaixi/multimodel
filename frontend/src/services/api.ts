@@ -39,66 +39,102 @@ function generateTraceId(): string {
 }
 
 // Health
-export function getHealth() {
-  return api.get<ApiResponse<{ service: string; status: string; websocketClients: number }>>('/system/health')
+export function getHealth(): Promise<{ service: string; status: string; websocketClients: number }> {
+  return api.get('/system/health') as any
 }
 
 // Models
-export function getModels() {
-  return api.get<ApiResponse<unknown[]>>('/models')
+export function getModels(): Promise<unknown[]> {
+  return api.get('/models') as any
+}
+
+export function analyzeModel(data: { fileName: string; fileSize: number; lastModified: string }): Promise<any> {
+  return api.post('/models/analyze', data) as any
 }
 
 // Tasks
-export function createTask(data: Record<string, unknown>) {
-  return api.post<ApiResponse<{ taskId: string }>>('/tasks', data)
+export function createTask(data: Record<string, unknown>): Promise<{ taskId: string }> {
+  return api.post('/tasks', data) as any
 }
 
-export function getTasks() {
-  return api.get<ApiResponse<unknown[]>>('/tasks')
+export function getTasks(): Promise<unknown[]> {
+  return api.get('/tasks') as any
 }
 
-export function getTask(taskId: string) {
-  return api.get<ApiResponse<unknown>>(`/tasks/${taskId}`)
+export function getTask(taskId: string): Promise<unknown> {
+  return api.get(`/tasks/${taskId}`) as any
 }
 
-export function startTask(taskId: string) {
-  return api.post<ApiResponse<unknown>>(`/tasks/${taskId}/start`)
+export function startTask(taskId: string): Promise<unknown> {
+  return api.post(`/tasks/${taskId}/start`) as any
 }
 
-export function controlTask(taskId: string, action: string) {
-  return api.post<ApiResponse<unknown>>(`/tasks/${taskId}/control`, { action })
+export function controlTask(taskId: string, action: string): Promise<unknown> {
+  return api.post(`/tasks/${taskId}/control`, { action }) as any
 }
 
 // Inference
-export function runInference(data: Record<string, unknown>) {
-  return api.post<ApiResponse<unknown>>('/inference/run', data)
+export function runInference(data: Record<string, unknown>): Promise<any> {
+  return api.post('/inference/run', data) as any
 }
 
 // Data Pipeline
-export function registerDataset(data: Record<string, unknown>) {
-  return api.post<ApiResponse<{ datasetId: string }>>('/data/datasets/register', data)
+export function registerDataset(data: Record<string, unknown>): Promise<{ datasetId: string }> {
+  return api.post('/data/datasets/register', data) as any
 }
 
-export function runPipeline(data: Record<string, unknown>) {
-  return api.post<ApiResponse<unknown>>('/data/pipelines/run', data)
+export function runPipeline(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/data/pipelines/run', data) as any
+}
+
+export function listDataSources(): Promise<unknown[]> {
+  return api.get('/data/datasources') as any
+}
+
+export function addDataSource(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/data/datasources', data) as any
+}
+
+export function searchSamples(data: Record<string, unknown>): Promise<unknown[]> {
+  return api.post('/data/samples/search', data) as any
+}
+
+export function addSample(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/data/samples', data) as any
+}
+
+export function processData(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/data/processing', data) as any
+}
+
+export function augmentData(data: Record<string, unknown>): Promise<unknown[]> {
+  return api.post('/data/augmentation', data) as any
+}
+
+export function fuseData(data: Record<string, unknown>): Promise<unknown[]> {
+  return api.post('/data/fusion', data) as any
+}
+
+export function generateScenario(data: Record<string, unknown>): Promise<unknown[]> {
+  return api.post('/data/scenarios/generate', data) as any
 }
 
 // Monitor
-export function getMetrics() {
-  return api.get<ApiResponse<unknown>>('/monitor/metrics')
+export function getMetrics(): Promise<unknown> {
+  return api.get('/monitor/metrics') as any
 }
 
-export function getAlerts() {
-  return api.get<ApiResponse<unknown>>('/monitor/alerts')
+export function getAlerts(): Promise<unknown> {
+  return api.get('/monitor/alerts') as any
 }
 
-export function updateThresholds(data: Record<string, unknown>) {
-  return api.post<ApiResponse<unknown>>('/monitor/thresholds', data)
+export function updateThresholds(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/monitor/thresholds', data) as any
 }
 
 // Reports
-export function getReport(taskId: string) {
-  return api.get<ApiResponse<unknown>>(`/reports/${taskId}`)
+export function getReport(taskId: string): Promise<unknown> {
+  return api.get(`/reports/${taskId}`) as any
 }
 
 export function exportReport(taskId: string, format: string) {
@@ -106,16 +142,16 @@ export function exportReport(taskId: string, format: string) {
 }
 
 // Users
-export function mockLogin(data: Record<string, unknown>) {
-  return api.post<ApiResponse<unknown>>('/users/mock-login', data)
+export function mockLogin(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/users/mock-login', data) as any
 }
 
-export function getLoginStats() {
-  return api.get<ApiResponse<unknown>>('/users/login-stats')
+export function getLoginStats(): Promise<unknown> {
+  return api.get('/users/login-stats') as any
 }
 
-export function getLoginSummary() {
-  return api.get<ApiResponse<unknown>>('/users/login-summary')
+export function getLoginSummary(): Promise<unknown> {
+  return api.get('/users/login-summary') as any
 }
 
 export default api
