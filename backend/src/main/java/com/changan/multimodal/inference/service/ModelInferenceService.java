@@ -1,20 +1,25 @@
 package com.changan.multimodal.inference.service;
 
+import com.changan.multimodal.data.service.DataPipelineService;
 import com.changan.multimodal.inference.dto.EvaluationMetric;
 import com.changan.multimodal.inference.dto.InferenceInput;
 import com.changan.multimodal.inference.dto.InferenceOutput;
 import com.changan.multimodal.inference.dto.InferenceRequest;
 import com.changan.multimodal.inference.dto.InferenceResponse;
+import com.changan.multimodal.model.dto.ModelRunLog;
 import com.changan.multimodal.model.dto.ModelDescriptor;
 import com.changan.multimodal.model.service.ModelRegistryService;
 import com.changan.multimodal.realtime.dto.WsMessageType;
 import com.changan.multimodal.realtime.service.WsMessageRouter;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,33 +30,56 @@ public class ModelInferenceService {
 
     private final WsMessageRouter wsMessageRouter;
     private final ModelRegistryService modelRegistryService;
+    private final LocalModelProcessRunner localModelProcessRunner;
+    private final DataPipelineService dataPipelineService;
+    private final ObjectMapper objectMapper;
 
     public InferenceResponse runInference(InferenceRequest request) {
         long startedAt = Instant.now().toEpochMilli();
         String jobId = UUID.randomUUID().toString().replace("-", "");
         
         ModelDescriptor model = findModel(request.getModelId());
-        List<InferenceOutput> outputs = request.getInputs().stream()
-                .map(input -> mockOutput(input, model))
-                .toList();
-        
-        List<EvaluationMetric> metrics = buildMetrics(model, outputs);
+        resolveManagedInputs(request);
+        JsonNode runnerResult = localModelProcessRunner.run(request, model.getRuntimeCommand()).orElse(null);
+        List<InferenceOutput> outputs = runnerResult == null
+                ? request.getInputs().stream().map(input -> mockOutput(input, model)).toList()
+                : parseOutputs(runnerResult, request, model);
+        List<EvaluationMetric> metrics = runnerResult == null
+                ? buildMetrics(model, outputs, request.getRequestedMetrics())
+                : parseMetrics(runnerResult, model, outputs, request.getRequestedMetrics());
+        long durationMs = runnerResult != null && runnerResult.has("durationMs")
+                ? runnerResult.path("durationMs").asLong()
+                : Math.max(80, request.getInputs().size() * 35L);
         
         InferenceResponse response = InferenceResponse.builder()
                 .jobId(jobId)
                 .modelId(request.getModelId())
                 .modality(request.getModality())
-                .durationMs(Math.max(80, request.getInputs().size() * 35L))
+                .durationMs(durationMs)
                 .outputs(outputs)
                 .metrics(metrics)
                 .status("COMPLETED")
                 .build();
+        long finishedAt = Instant.now().toEpochMilli();
+        modelRegistryService.appendRunLog(ModelRunLog.builder()
+                .logId(UUID.randomUUID().toString().replace("-", ""))
+                .modelId(request.getModelId())
+                .jobId(jobId)
+                .status("COMPLETED")
+                .startedAt(startedAt)
+                .finishedAt(finishedAt)
+                .durationMs(finishedAt - startedAt)
+                .command(model.getRuntimeCommand() == null ? "default local demo runner" : model.getRuntimeCommand())
+                .message(runnerResult == null
+                        ? "Local model process unavailable; deterministic demo result returned. adapterType=" + model.getAdapterType()
+                        : "Local model process completed. adapterType=" + model.getAdapterType())
+                .build());
         
         wsMessageRouter.broadcast(WsMessageType.MODEL_RESULT, Map.of(
                 "jobId", jobId,
                 "modelId", request.getModelId(),
                 "modality", request.getModality(),
-                "finishedAt", Instant.now().toEpochMilli(),
+                "finishedAt", finishedAt,
                 "startedAt", startedAt,
                 "status", "COMPLETED"
         ));
@@ -63,17 +91,63 @@ public class ModelInferenceService {
         return modelRegistryService.listModels().stream()
                 .filter(m -> m.getModelId().equals(modelId))
                 .findFirst()
-                .orElse(ModelDescriptor.builder()
+                .orElseGet(() -> ModelDescriptor.builder()
                         .modelId(modelId)
                         .modelCategory("UNCLASSIFIED")
                         .availableMetrics(List.of("mAP", "Precision", "Recall"))
                         .build());
     }
 
+    private List<InferenceOutput> parseOutputs(JsonNode runnerResult, InferenceRequest request, ModelDescriptor model) {
+        JsonNode outputsNode = runnerResult.path("outputs");
+        if (!outputsNode.isArray()) {
+            return request.getInputs().stream().map(input -> mockOutput(input, model)).toList();
+        }
+        List<InferenceOutput> outputs = new ArrayList<>();
+        for (JsonNode item : outputsNode) {
+            InferenceOutput output = objectMapper.convertValue(item, InferenceOutput.class);
+            InferenceInput sourceInput = request.getInputs().stream()
+                    .filter(input -> input.getInputId().equals(output.getInputId()))
+                    .findFirst()
+                    .orElse(null);
+            Map<String, Object> safeExtra = sanitizeRunnerOutput(output.getExtra());
+            if (sourceInput != null && sourceInput.getSampleId() != null) {
+                safeExtra.put("sampleId", sourceInput.getSampleId());
+            }
+            outputs.add(InferenceOutput.builder()
+                    .inputId(output.getInputId())
+                    .label(output.getLabel())
+                    .confidence(output.getConfidence())
+                    .extra(safeExtra)
+                    .build());
+        }
+        return outputs;
+    }
+
+    private List<EvaluationMetric> parseMetrics(JsonNode runnerResult, ModelDescriptor model,
+                                                List<InferenceOutput> outputs, List<String> requestedMetrics) {
+        JsonNode metricsNode = runnerResult.path("metrics");
+        if (!metricsNode.isArray()) {
+            return buildMetrics(model, outputs, requestedMetrics);
+        }
+        List<EvaluationMetric> metrics = new ArrayList<>();
+        for (JsonNode item : metricsNode) {
+            metrics.add(objectMapper.convertValue(item, EvaluationMetric.class));
+        }
+        return metrics;
+    }
+
     private InferenceOutput mockOutput(InferenceInput input, ModelDescriptor model) {
         Map<String, Object> extra = new HashMap<>();
-        extra.put("sourceUri", input.getSourceUri());
+        if (input.getSampleId() != null) {
+            extra.put("sampleId", input.getSampleId());
+        }
         extra.put("modelCategory", model.getModelCategory());
+        extra.put("adapterType", model.getAdapterType());
+        extra.put("adapterStatus", model.getAdapterStatus());
+        extra.put("adapterConfig", model.getAdapterConfig());
+        extra.put("outputSchema", model.getOutputSchema());
+        extra.put("resultMode", model.getRuntimeCommand() == null ? "DEMO_RESULT" : "REAL_ADAPTER_FALLBACK");
         
         String label = switch (model.getModelCategory()) {
             case "OBJECT_DETECTION" -> "object.detected";
@@ -105,8 +179,56 @@ public class ModelInferenceService {
                 .build();
     }
 
-    private List<EvaluationMetric> buildMetrics(ModelDescriptor model, List<InferenceOutput> outputs) {
-        List<String> availableMetrics = model.getAvailableMetrics();
+    private void resolveManagedInputs(InferenceRequest request) {
+        for (InferenceInput input : request.getInputs()) {
+            if (input.getSampleId() != null && !input.getSampleId().isBlank()) {
+                input.setSourceUri(dataPipelineService.resolveSamplePath(input.getSampleId()).toString());
+                Map<String, Object> attributes = new HashMap<>(
+                        input.getAttributes() == null ? Map.of() : input.getAttributes()
+                );
+                dataPipelineService.resolveSampleLabelPath(input.getSampleId())
+                        .ifPresent(path -> attributes.put("labelUri", path.toString()));
+                input.setAttributes(attributes);
+                if (input.getInputId() == null || input.getInputId().isBlank()) {
+                    input.setInputId(input.getSampleId());
+                }
+            } else if (input.getInputId() == null || input.getInputId().isBlank()) {
+                input.setInputId(UUID.randomUUID().toString().replace("-", ""));
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> sanitizeRunnerOutput(Map<String, Object> extra) {
+        Map<String, Object> safe = new LinkedHashMap<>();
+        if (extra == null) {
+            return safe;
+        }
+        extra.forEach((key, value) -> {
+            if ("sourceUri".equalsIgnoreCase(key)
+                    || "storageKey".equalsIgnoreCase(key)
+                    || "labelUri".equalsIgnoreCase(key)) {
+                return;
+            }
+            if (value instanceof Map<?, ?> nested) {
+                safe.put(key, sanitizeRunnerOutput((Map<String, Object>) nested));
+            } else if (value instanceof List<?> list) {
+                safe.put(key, list.stream().map(item -> item instanceof Map<?, ?>
+                        ? sanitizeRunnerOutput((Map<String, Object>) item)
+                        : item).toList());
+            } else {
+                safe.put(key, value);
+            }
+        });
+        return safe;
+    }
+
+    private List<EvaluationMetric> buildMetrics(ModelDescriptor model, List<InferenceOutput> outputs,
+                                                List<String> requestedMetrics) {
+        List<String> availableMetrics = requestedMetrics;
+        if (availableMetrics == null || availableMetrics.isEmpty()) {
+            availableMetrics = model.getAvailableMetrics();
+        }
         if (availableMetrics == null || availableMetrics.isEmpty()) {
             availableMetrics = List.of("mAP", "Precision", "Recall");
         }

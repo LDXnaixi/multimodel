@@ -15,6 +15,7 @@ public final class WsMessageType {
     public static final String RESOURCE_ALERT = "RESOURCE_ALERT";
     public static final String MODEL_RESULT = "MODEL_RESULT";
     public static final String DATA_PIPELINE = "DATA_PIPELINE";
+    public static final String DATA_CATALOG_CHANGED = "DATA_CATALOG_CHANGED";
 
     private WsMessageType() {
     }

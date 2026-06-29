@@ -126,6 +126,12 @@
 
 - `POST /api/v1/inference/run`
 
+客户端应先调用数据集接口取得 `sampleId`，不允许依赖服务器文件路径：
+
+1. `POST /api/v1/data/datasets/upload`，使用 `multipart/form-data`，字段为 `datasetName`、可重复的 `tags`、可重复的 `relativePaths` 和可重复的 `files`。`relativePaths[i]` 必须对应 `files[i]`。
+2. `GET /api/v1/data/datasets`，读取服务器权威数据集清单。
+3. `GET /api/v1/data/datasets/{datasetId}/samples`，读取可用于推理的样本。
+
 请求示例：
 
 ```json
@@ -134,10 +140,10 @@
   "modality": "image",
   "inputs": [
     {
-      "inputId": "img-001",
-      "sourceUri": "samples/car.png",
+      "inputId": "服务器样本ID",
+      "sampleId": "服务器样本ID",
       "attributes": {
-        "scene": "factory"
+        "datasetId": "服务器数据集ID"
       }
     }
   ],
@@ -148,11 +154,13 @@
 }
 ```
 
-用途：前端发起统一推理请求，后端返回推理结果和评测指标，并同时向 WebSocket 广播 `MODEL_RESULT`。
+用途：前端发起统一推理请求，后端解析受管文件、返回推理结果和评测指标，并同时向 WebSocket 广播 `MODEL_RESULT`。服务器内部路径不会返回给前端。
 
 ### 3.9 多模态数据集注册
 
 - `POST /api/v1/data/datasets/register`
+
+这个 JSON 接口用于登记服务器端或任务流已经掌握的资产引用。浏览器本地数据集必须使用上面的 `/data/datasets/upload` 选择文件夹，并保留 `webkitRelativePath`；仅提交本地文件名不会上传文件内容。文件夹内每张图片必须有同名标签，支持混放或 `images`、`labels` 分目录。
 
 请求示例：
 

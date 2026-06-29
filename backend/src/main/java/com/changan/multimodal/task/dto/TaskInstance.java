@@ -2,12 +2,14 @@ package com.changan.multimodal.task.dto;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
 import java.time.Instant;
 import java.util.List;
 
 @Getter
 @Builder(toBuilder = true)
+@Jacksonized
 public class TaskInstance {
 
     private final String taskId;

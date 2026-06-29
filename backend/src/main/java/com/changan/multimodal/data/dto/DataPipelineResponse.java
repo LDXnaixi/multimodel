@@ -2,11 +2,13 @@ package com.changan.multimodal.data.dto;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
 import java.util.List;
 
 @Getter
 @Builder
+@Jacksonized
 public class DataPipelineResponse {
 
     private final String pipelineId;

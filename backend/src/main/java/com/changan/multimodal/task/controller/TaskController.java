@@ -2,8 +2,12 @@ package com.changan.multimodal.task.controller;
 
 import com.changan.multimodal.common.api.ApiResponse;
 import com.changan.multimodal.task.dto.CreateTaskRequest;
+import com.changan.multimodal.task.dto.RerunRequest;
 import com.changan.multimodal.task.dto.TaskControlRequest;
 import com.changan.multimodal.task.dto.TaskInstance;
+import com.changan.multimodal.task.dto.TaskTemplateRequest;
+import com.changan.multimodal.task.dto.TaskTemplateView;
+import com.changan.multimodal.task.dto.WorkflowValidationResult;
 import com.changan.multimodal.task.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -47,5 +51,36 @@ public class TaskController {
     public ApiResponse<TaskInstance> control(@PathVariable String taskId,
                                              @Valid @RequestBody TaskControlRequest request) {
         return ApiResponse.success(taskService.control(taskId, request));
+    }
+
+    @PostMapping("/validate")
+    public ApiResponse<WorkflowValidationResult> validate(@Valid @RequestBody CreateTaskRequest request) {
+        return ApiResponse.success(taskService.validate(request));
+    }
+
+    @PostMapping("/simulate")
+    public ApiResponse<WorkflowValidationResult> simulate(@Valid @RequestBody CreateTaskRequest request) {
+        return ApiResponse.success(taskService.simulate(request));
+    }
+
+    @PostMapping("/{taskId}/rerun")
+    public ApiResponse<TaskInstance> rerun(@PathVariable String taskId, @RequestBody RerunRequest request) {
+        return ApiResponse.success(taskService.rerun(taskId, request));
+    }
+
+    @PostMapping("/templates")
+    public ApiResponse<TaskTemplateView> saveTemplate(@Valid @RequestBody TaskTemplateRequest request) {
+        return ApiResponse.success(taskService.saveTemplate(request));
+    }
+
+    @GetMapping("/templates")
+    public ApiResponse<List<TaskTemplateView>> listTemplates() {
+        return ApiResponse.success(taskService.listTemplates());
+    }
+
+    @PostMapping("/templates/{templateId}/tasks")
+    public ApiResponse<TaskInstance> createFromTemplate(@PathVariable String templateId,
+                                                        @Valid @RequestBody CreateTaskRequest request) {
+        return ApiResponse.success(taskService.createFromTemplate(templateId, request));
     }
 }

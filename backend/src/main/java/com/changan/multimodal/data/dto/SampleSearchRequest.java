@@ -7,6 +7,7 @@ import java.util.List;
 
 @Data
 public class SampleSearchRequest {
+    private String datasetId;
     private String keyword;
     private String eventType;
     private Instant startTime;

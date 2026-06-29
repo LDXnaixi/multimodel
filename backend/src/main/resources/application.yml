@@ -4,6 +4,34 @@ server:
 spring:
   application:
     name: multimodal-test-backend
+  servlet:
+    multipart:
+      max-file-size: 2GB
+      max-request-size: 2GB
+  datasource:
+    url: ${APP_DATASOURCE_URL:jdbc:mysql://localhost:3306/multimodal_test?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai}
+    username: ${APP_DATASOURCE_USERNAME:root}
+    password: ${APP_DATASOURCE_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: Asia/Shanghai
+
+app:
+  sample-storage:
+    root: ${APP_SAMPLE_STORAGE_ROOT:./data/sample-assets}
+  model-storage:
+    root: ${APP_MODEL_STORAGE_ROOT:./data/model-artifacts}
+  model-runner:
+    timeout-ms: ${APP_MODEL_RUNNER_TIMEOUT_MS:8000}
+    python-command: ${APP_MODEL_RUNNER_PYTHON:python}
+    script-path: ${APP_MODEL_RUNNER_SCRIPT:./model-runners/demo_model_runner.py}
 
 management:
   endpoints:

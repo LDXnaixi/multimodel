@@ -63,20 +63,30 @@
         <button class="btn btn-primary" @click="control('RERUN')">重新运行</button>
         <button class="btn btn-danger" @click="control('TERMINATE')">终止</button>
       </div>
+      <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center;">
+        <select v-model="rerunForm.mode" class="form-control" style="max-width: 200px;">
+          <option value="FULL_CHAIN">全链路重跑</option>
+          <option value="SINGLE_NODE">单节点重跑</option>
+          <option value="NODE_AND_DOWNSTREAM">节点及后续重跑</option>
+        </select>
+        <input v-model="rerunForm.nodeId" class="form-control" style="max-width: 220px;" placeholder="节点ID，可选" />
+        <button class="btn btn-primary" @click="rerun">按范围重跑</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { getTask, controlTask } from '../services/api'
+import { getTask, controlTask, rerunTask } from '../services/api'
 import { wsService } from '../services/websocket'
 import { useTaskStore } from '../stores/task'
 
 const route = useRoute()
 const taskStore = useTaskStore()
 const taskId = route.params.taskId as string
+const rerunForm = ref({ mode: 'FULL_CHAIN', nodeId: '' })
 
 const task = computed(() => taskStore.currentTask)
 const progress = computed(() => taskStore.getTaskProgress(taskId))
@@ -107,6 +117,19 @@ async function control(action: string) {
     loadTask()
   } catch (e) {
     alert('操作失败')
+  }
+}
+
+async function rerun() {
+  try {
+    await rerunTask(taskId, {
+      mode: rerunForm.value.mode,
+      nodeId: rerunForm.value.nodeId || undefined
+    })
+    alert('重跑已启动')
+    loadTask()
+  } catch (e) {
+    alert('重跑失败')
   }
 }
 

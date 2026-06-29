@@ -9,6 +9,40 @@ export interface ApiResponse<T = unknown> {
   traceId: string
 }
 
+export interface DatasetSummary {
+  datasetId: string
+  datasetName: string
+  assetCount: number
+  supportedModalities: string[]
+  version: string
+  status: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface SampleSummary {
+  sampleId: string
+  datasetId: string
+  name: string
+  dataType: string
+  contentUrl: string
+  imageRelativePath?: string
+  originalName: string
+  contentType?: string
+  fileSize?: number
+  sha256?: string
+  labelContentUrl?: string
+  labelRelativePath?: string
+  labelOriginalName?: string
+  labelContentType?: string
+  labelFileSize?: number
+  labelSha256?: string
+  tags: string[]
+  metadata: Record<string, unknown>
+  version: string
+  createdAt?: string
+}
+
 const api: AxiosInstance = axios.create({
   baseURL: '/api/v1',
   headers: {
@@ -26,7 +60,14 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    if (response.config.responseType === 'blob') return response.data
+    const body = response.data
+    if (body && typeof body === 'object' && 'success' in body && 'data' in body) {
+      return body.data
+    }
+    return body
+  },
   (error) => Promise.reject(error)
 )
 
@@ -52,6 +93,41 @@ export function analyzeModel(data: { fileName: string; fileSize: number; lastMod
   return api.post('/models/analyze', data) as any
 }
 
+export function registerModel(data: Record<string, unknown>): Promise<any> {
+  return api.post('/models', data) as any
+}
+
+export function uploadModelArtifact(data: FormData, kind: 'file' | 'directory'): Promise<any> {
+  return api.post(`/models/artifacts/upload?kind=${kind}`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }) as any
+}
+
+export function updateModelStatus(modelId: string, status: string): Promise<any> {
+  return api.post(`/models/${modelId}/status`, { status }) as any
+}
+
+export function rollbackModel(modelId: string, version: string): Promise<any> {
+  return api.post(`/models/${modelId}/rollback`, { version }) as any
+}
+
+export function getModelRunLogs(): Promise<unknown[]> {
+  return api.get('/models/run-logs') as any
+}
+
+export function getAdapterPresets(): Promise<unknown[]> {
+  return api.get('/adapters/presets') as any
+}
+
+export function saveAdapterPreset(data: Record<string, unknown>, presetId?: string): Promise<unknown> {
+  if (presetId) return api.put(`/adapters/presets/${presetId}`, data) as any
+  return api.post('/adapters/presets', data) as any
+}
+
+export function deleteAdapterPreset(presetId: string): Promise<unknown> {
+  return api.delete(`/adapters/presets/${presetId}`) as any
+}
+
 // Tasks
 export function createTask(data: Record<string, unknown>): Promise<{ taskId: string }> {
   return api.post('/tasks', data) as any
@@ -73,6 +149,30 @@ export function controlTask(taskId: string, action: string): Promise<unknown> {
   return api.post(`/tasks/${taskId}/control`, { action }) as any
 }
 
+export function validateTask(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/tasks/validate', data) as any
+}
+
+export function simulateTask(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/tasks/simulate', data) as any
+}
+
+export function rerunTask(taskId: string, data: Record<string, unknown>): Promise<unknown> {
+  return api.post(`/tasks/${taskId}/rerun`, data) as any
+}
+
+export function saveTaskTemplate(data: Record<string, unknown>): Promise<unknown> {
+  return api.post('/tasks/templates', data) as any
+}
+
+export function getTaskTemplates(): Promise<unknown[]> {
+  return api.get('/tasks/templates') as any
+}
+
+export function createTaskFromTemplate(templateId: string, data: Record<string, unknown>): Promise<unknown> {
+  return api.post(`/tasks/templates/${templateId}/tasks`, data) as any
+}
+
 // Inference
 export function runInference(data: Record<string, unknown>): Promise<any> {
   return api.post('/inference/run', data) as any
@@ -81,6 +181,32 @@ export function runInference(data: Record<string, unknown>): Promise<any> {
 // Data Pipeline
 export function registerDataset(data: Record<string, unknown>): Promise<{ datasetId: string }> {
   return api.post('/data/datasets/register', data) as any
+}
+
+export function uploadDataset(datasetName: string, files: File[], tags: string[] = []): Promise<DatasetSummary> {
+  const data = new FormData()
+  data.append('datasetName', datasetName)
+  tags.forEach(tag => data.append('tags', tag))
+  files.forEach(file => {
+    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+    data.append('relativePaths', relativePath)
+    data.append('files', file, file.name)
+  })
+  return api.post('/data/datasets/upload', data, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }) as any
+}
+
+export function listDatasets(): Promise<DatasetSummary[]> {
+  return api.get('/data/datasets') as any
+}
+
+export function listDatasetSamples(datasetId: string): Promise<SampleSummary[]> {
+  return api.get(`/data/datasets/${encodeURIComponent(datasetId)}/samples`) as any
+}
+
+export function getSample(sampleId: string): Promise<SampleSummary> {
+  return api.get(`/data/samples/${encodeURIComponent(sampleId)}`) as any
 }
 
 export function runPipeline(data: Record<string, unknown>): Promise<unknown> {
@@ -97,10 +223,6 @@ export function addDataSource(data: Record<string, unknown>): Promise<unknown> {
 
 export function searchSamples(data: Record<string, unknown>): Promise<unknown[]> {
   return api.post('/data/samples/search', data) as any
-}
-
-export function addSample(data: Record<string, unknown>): Promise<unknown> {
-  return api.post('/data/samples', data) as any
 }
 
 export function processData(data: Record<string, unknown>): Promise<unknown> {
@@ -152,6 +274,15 @@ export function getLoginStats(): Promise<unknown> {
 
 export function getLoginSummary(): Promise<unknown> {
   return api.get('/users/login-summary') as any
+}
+
+// Environment
+export function captureEnvironment(): Promise<unknown> {
+  return api.post('/environment/capture') as any
+}
+
+export function getEnvironmentReports(): Promise<unknown[]> {
+  return api.get('/environment/reports') as any
 }
 
 export default api

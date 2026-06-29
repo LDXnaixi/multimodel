@@ -1,297 +1,207 @@
 package com.changan.multimodal.model.service;
 
+import com.changan.multimodal.adapter.dto.AdapterPreset;
+import com.changan.multimodal.adapter.service.AdapterPresetService;
+import com.changan.multimodal.common.persistence.DemoPersistenceService;
 import com.changan.multimodal.model.dto.ModelDescriptor;
+import com.changan.multimodal.model.dto.ModelLifecycleRequest;
+import com.changan.multimodal.model.dto.ModelRunLog;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class ModelRegistryService {
 
+    private static final String DOMAIN = "MODEL";
+    private static final String TYPE_DESCRIPTOR = "DESCRIPTOR";
+    private static final String TYPE_RUN_LOG = "RUN_LOG";
+
+    private final DemoPersistenceService persistenceService;
+    private final AdapterPresetService adapterPresetService;
+
     public List<ModelDescriptor> listModels() {
-        return List.of(
-                // 目标检测模型
-                ModelDescriptor.builder()
-                        .modelId("yolov7-detection")
-                        .modelName("YOLOv7")
-                        .version("1.0.0")
-                        .algorithmType("object-detection")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image", "video"))
-                        .todo("目标检测 - 支持 mAP、Precision、Recall 评估")
-                        .invocationCount(3847)
-                        .averageLatency(68.4)
-                        .modelCategory("OBJECT_DETECTION")
-                        .availableMetrics(List.of("mAP", "Precision", "Recall", "FPS"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("yolov8-detection")
-                        .modelName("YOLOv8")
-                        .version("8.2.0")
-                        .algorithmType("object-detection")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image", "video"))
-                        .todo("目标检测 - 支持 mAP、Precision、Recall 评估")
-                        .invocationCount(5234)
-                        .averageLatency(52.7)
-                        .modelCategory("OBJECT_DETECTION")
-                        .availableMetrics(List.of("mAP", "Precision", "Recall", "FPS"))
-                        .isCustom(false)
-                        .build(),
-                
-                // OCR 模型
-                ModelDescriptor.builder()
-                        .modelId("dbnet-detector")
-                        .modelName("DBNet")
-                        .version("2.0")
-                        .algorithmType("text-detection")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image"))
-                        .todo("文本检测 - 支持识别准确率、拒识率评估")
-                        .invocationCount(1892)
-                        .averageLatency(115.3)
-                        .modelCategory("OCR")
-                        .availableMetrics(List.of("Accuracy", "RecognitionRate", "RejectionRate", "Precision"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("crnn-recognizer")
-                        .modelName("CRNN")
-                        .version("1.1")
-                        .algorithmType("text-recognition")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image"))
-                        .todo("文本识别 - 支持识别准确率、拒识率评估")
-                        .invocationCount(1567)
-                        .averageLatency(92.8)
-                        .modelCategory("OCR")
-                        .availableMetrics(List.of("Accuracy", "RecognitionRate", "RejectionRate"))
-                        .isCustom(false)
-                        .build(),
-                
-                // 图像分类模型
-                ModelDescriptor.builder()
-                        .modelId("mobilenet-classifier")
-                        .modelName("MobileNet")
-                        .version("v3-large")
-                        .algorithmType("image-classification")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image"))
-                        .todo("图像分类 - 支持 Top-1/Top-5 准确率评估")
-                        .invocationCount(4213)
-                        .averageLatency(23.4)
-                        .modelCategory("IMAGE_CLASSIFICATION")
-                        .availableMetrics(List.of("Top1-Accuracy", "Top5-Accuracy", "Latency"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("resnet50-classifier")
-                        .modelName("ResNet50")
-                        .version("v1.5")
-                        .algorithmType("image-classification")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image"))
-                        .todo("图像分类 - 支持 Top-1/Top-5 准确率评估")
-                        .invocationCount(3782)
-                        .averageLatency(45.6)
-                        .modelCategory("IMAGE_CLASSIFICATION")
-                        .availableMetrics(List.of("Top1-Accuracy", "Top5-Accuracy"))
-                        .isCustom(false)
-                        .build(),
-                
-                // 语义分析模型
-                ModelDescriptor.builder()
-                        .modelId("bert-base")
-                        .modelName("BERT")
-                        .version("base-chinese")
-                        .algorithmType("semantic-analysis")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("text"))
-                        .todo("语义分析 - 支持情感倾向、语义相似度评估")
-                        .invocationCount(2891)
-                        .averageLatency(156.2)
-                        .modelCategory("SEMANTIC_ANALYSIS")
-                        .availableMetrics(List.of("Accuracy", "F1-Score", "Precision", "Recall"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("lstm-sentiment")
-                        .modelName("LSTM")
-                        .version("1.2")
-                        .algorithmType("sentiment-analysis")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("text"))
-                        .todo("情感分析 - LSTM 架构")
-                        .invocationCount(1245)
-                        .averageLatency(89.4)
-                        .modelCategory("SEMANTIC_ANALYSIS")
-                        .availableMetrics(List.of("Accuracy", "F1-Score"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("gru-classifier")
-                        .modelName("GRU")
-                        .version("1.0")
-                        .algorithmType("text-classification")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("text"))
-                        .todo("文本分类 - GRU 架构")
-                        .invocationCount(892)
-                        .averageLatency(78.5)
-                        .modelCategory("SEMANTIC_ANALYSIS")
-                        .availableMetrics(List.of("Accuracy", "Precision", "Recall"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("transformer-base")
-                        .modelName("Transformer")
-                        .version("base")
-                        .algorithmType("semantic-analysis")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("text"))
-                        .todo("语义分析 - Transformer 架构")
-                        .invocationCount(1782)
-                        .averageLatency(167.3)
-                        .modelCategory("SEMANTIC_ANALYSIS")
-                        .availableMetrics(List.of("Accuracy", "Perplexity"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("roberta-chinese")
-                        .modelName("RoBERTa")
-                        .version("chinese-wwm")
-                        .algorithmType("semantic-analysis")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("text"))
-                        .todo("语义分析 - RoBERTa 系列")
-                        .invocationCount(2134)
-                        .averageLatency(178.9)
-                        .modelCategory("SEMANTIC_ANALYSIS")
-                        .availableMetrics(List.of("Accuracy", "F1-Score", "Precision", "Recall"))
-                        .isCustom(false)
-                        .build(),
-                
-                // 语音识别模型
-                ModelDescriptor.builder()
-                        .modelId("deepspeech2")
-                        .modelName("DeepSpeech")
-                        .version("2.0")
-                        .algorithmType("speech-to-text")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("audio"))
-                        .todo("语音识别 - DeepSpeech 模型")
-                        .invocationCount(1567)
-                        .averageLatency(345.6)
-                        .modelCategory("SPEECH_RECOGNITION")
-                        .availableMetrics(List.of("WER", "CER", "Latency"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("whisper-demo")
-                        .modelName("Whisper")
-                        .version("large-v3")
-                        .algorithmType("speech-to-text")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("audio"))
-                        .todo("语音识别 - Whisper 模型，支持多语言")
-                        .invocationCount(3456)
-                        .averageLatency(289.4)
-                        .modelCategory("SPEECH_RECOGNITION")
-                        .availableMetrics(List.of("WER", "CER", "Latency"))
-                        .isCustom(false)
-                        .build(),
-                
-                // 视觉语言大模型
-                ModelDescriptor.builder()
-                        .modelId("qwen-vl")
-                        .modelName("Qwen-VL")
-                        .version("1.5")
-                        .algorithmType("vision-language")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image", "text"))
-                        .todo("视觉语言大模型 - Qwen-VL，支持动态切换")
-                        .invocationCount(678)
-                        .averageLatency(1245.3)
-                        .modelCategory("VISION_LANGUAGE")
-                        .availableMetrics(List.of("BLEU", "ROUGE", "Relevance"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("yi-vl")
-                        .modelName("Yi-VL")
-                        .version("6B")
-                        .algorithmType("vision-language")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image", "text"))
-                        .todo("视觉语言大模型 - Yi-VL，支持动态切换")
-                        .invocationCount(456)
-                        .averageLatency(1123.8)
-                        .modelCategory("VISION_LANGUAGE")
-                        .availableMetrics(List.of("BLEU", "ROUGE"))
-                        .isCustom(false)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("visualglm")
-                        .modelName("VisualGLM")
-                        .version("6B")
-                        .algorithmType("vision-language")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image", "text"))
-                        .todo("视觉语言大模型 - VisualGLM，支持动态切换")
-                        .invocationCount(389)
-                        .averageLatency(1087.2)
-                        .modelCategory("VISION_LANGUAGE")
-                        .availableMetrics(List.of("BLEU", "ROUGE"))
-                        .isCustom(false)
-                        .build(),
-                
-                // 自定义模型
-                ModelDescriptor.builder()
-                        .modelId("custom-model-v1")
-                        .modelName("甲方自研模型")
-                        .version("1.0.0")
-                        .algorithmType("custom")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image", "text", "audio"))
-                        .todo("甲方自研模型 - 支持标准化模型接口")
-                        .invocationCount(234)
-                        .averageLatency(189.5)
-                        .modelCategory("CUSTOM")
-                        .availableMetrics(List.of("Accuracy", "Latency"))
-                        .isCustom(true)
-                        .build(),
-                ModelDescriptor.builder()
-                        .modelId("custom-finetuned")
-                        .modelName("微调改进模型")
-                        .version("2.1.0")
-                        .algorithmType("custom-finetuned")
-                        .deploymentStatus("RUNNING")
-                        .supportedModalities(List.of("image"))
-                        .todo("基于现有模型微调改进 - 支持标准化模型接口")
-                        .invocationCount(189)
-                        .averageLatency(156.7)
-                        .modelCategory("CUSTOM")
-                        .availableMetrics(List.of("Accuracy", "mAP"))
-                        .isCustom(true)
-                        .build()
-        );
+        seedIfNecessary();
+        return persistenceService.findAll(DOMAIN, TYPE_DESCRIPTOR, ModelDescriptor.class);
+    }
+
+    public ModelDescriptor register(ModelLifecycleRequest request) {
+        long now = Instant.now().toEpochMilli();
+        String modelId = request.getModelId() == null || request.getModelId().isBlank()
+                ? "model-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8)
+                : request.getModelId();
+        String category = request.getModelCategory() == null ? "CUSTOM" : request.getModelCategory();
+        AdapterPreset preset = resolvePreset(request.getAdapterType(), category);
+        ModelDescriptor descriptor = ModelDescriptor.builder()
+                .modelId(modelId)
+                .modelName(request.getModelName() == null ? modelId : request.getModelName())
+                .version(request.getVersion() == null ? "1.0.0" : request.getVersion())
+                .activeVersion(request.getVersion() == null ? "1.0.0" : request.getVersion())
+                .algorithmType(request.getAlgorithmType() == null ? preset.getTaskType() : request.getAlgorithmType())
+                .deploymentStatus("OFFLINE")
+                .supportedModalities(request.getSupportedModalities() == null ? preset.getSupportedModalities() : request.getSupportedModalities())
+                .todo("Registered with adapterType=" + preset.getAdapterType() + ". Runtime uses standardized JSON input/output.")
+                .invocationCount(0)
+                .averageLatency(0.0)
+                .modelCategory(category)
+                .availableMetrics(request.getAvailableMetrics() == null ? preset.getMetrics() : request.getAvailableMetrics())
+                .isCustom(true)
+                .runtimeCommand(request.getRuntimeCommand())
+                .packageUri(request.getPackageUri())
+                .adapterType(preset.getAdapterType())
+                .adapterStatus(request.getAdapterStatus() == null ? inferAdapterStatus(request, preset) : request.getAdapterStatus())
+                .adapterConfig(request.getAdapterConfig() == null ? preset.getDefaultConfig() : request.getAdapterConfig())
+                .datasetFormats(request.getDatasetFormats() == null ? preset.getDatasetFormats() : request.getDatasetFormats())
+                .outputSchema(preset.getOutputSchema())
+                .updatedAt(now)
+                .build();
+        return persistenceService.save(DOMAIN, TYPE_DESCRIPTOR, modelId, descriptor);
     }
 
     public ModelDescriptor analyzeModel(String onnxFileName, long fileSize) {
-        return ModelDescriptor.builder()
-                .modelId("onnx-" + System.currentTimeMillis())
-                .modelName(onnxFileName.replace(".onnx", ""))
-                .version("1.0.0")
-                .algorithmType("onnx-inferred")
+        ModelLifecycleRequest request = new ModelLifecycleRequest();
+        request.setModelId("onnx-" + System.currentTimeMillis());
+        request.setModelName(onnxFileName == null ? "onnx-model" : onnxFileName.replace(".onnx", ""));
+        request.setVersion("1.0.0");
+        request.setAlgorithmType("onnx-inferred");
+        request.setModelCategory("CUSTOM");
+        request.setSupportedModalities(List.of("image", "tensor"));
+        request.setAvailableMetrics(List.of("Latency", "Throughput"));
+        request.setPackageUri("upload://" + onnxFileName + "?size=" + fileSize);
+        request.setAdapterType("CUSTOM_JSON_PROCESS");
+        ModelDescriptor analyzed = register(request).toBuilder()
                 .deploymentStatus("ANALYZED")
-                .supportedModalities(List.of("image", "tensor"))
-                .todo("通过 ONNX 解析获得，可接入标准化接口")
+                .todo("ONNX metadata registered. Select YOLO/PaddleOCR/TorchVision/etc adapter before strict evaluation.")
+                .build();
+        return persistenceService.save(DOMAIN, TYPE_DESCRIPTOR, analyzed.getModelId(), analyzed);
+    }
+
+    public ModelDescriptor changeStatus(String modelId, String status) {
+        ModelDescriptor current = findById(modelId);
+        ModelDescriptor updated = current.toBuilder()
+                .deploymentStatus(status)
+                .updatedAt(Instant.now().toEpochMilli())
+                .build();
+        return persistenceService.save(DOMAIN, TYPE_DESCRIPTOR, modelId, updated);
+    }
+
+    public ModelDescriptor rollback(String modelId, String version) {
+        ModelDescriptor current = findById(modelId);
+        ModelDescriptor updated = current.toBuilder()
+                .version(version)
+                .activeVersion(version)
+                .deploymentStatus("RUNNING")
+                .todo("Rolled back to version " + version)
+                .updatedAt(Instant.now().toEpochMilli())
+                .build();
+        return persistenceService.save(DOMAIN, TYPE_DESCRIPTOR, modelId, updated);
+    }
+
+    public ModelDescriptor findById(String modelId) {
+        seedIfNecessary();
+        return persistenceService.findOne(DOMAIN, TYPE_DESCRIPTOR, modelId, ModelDescriptor.class)
+                .orElseThrow(() -> new IllegalArgumentException("Model not found: " + modelId));
+    }
+
+    public ModelRunLog appendRunLog(ModelRunLog log) {
+        return persistenceService.save(DOMAIN, TYPE_RUN_LOG, log.getLogId(), log);
+    }
+
+    public List<ModelRunLog> listRunLogs() {
+        return persistenceService.findAll(DOMAIN, TYPE_RUN_LOG, ModelRunLog.class);
+    }
+
+    private void seedIfNecessary() {
+        if (persistenceService.exists(DOMAIN, TYPE_DESCRIPTOR)) {
+            return;
+        }
+        long now = Instant.now().toEpochMilli();
+        for (ModelDescriptor descriptor : defaultModels(now)) {
+            persistenceService.save(DOMAIN, TYPE_DESCRIPTOR, descriptor.getModelId(), descriptor);
+        }
+    }
+
+    private List<ModelDescriptor> defaultModels(long now) {
+        return List.of(
+                descriptor("yolov7-detection", "YOLOv7 Detect", "1.0.0", "object-detection", "OBJECT_DETECTION", "YOLO_DETECT", now),
+                descriptor("yolov8-detection", "YOLOv8 Detect", "8.2.0", "object-detection", "OBJECT_DETECTION", "YOLO_DETECT", now),
+                descriptor("yolov8-pose", "YOLOv8 Pose", "8.2.0", "pose-estimation", "OBJECT_DETECTION", "YOLO_POSE", now),
+                descriptor("yolov8-segment", "YOLOv8 Segment", "8.2.0", "instance-segmentation", "OBJECT_DETECTION", "YOLO_SEGMENT", now),
+                descriptor("dbnet-detector", "DBNet", "2.0", "text-detection", "OCR", "PADDLEOCR_DB_DET", now),
+                descriptor("crnn-recognizer", "CRNN", "1.1", "text-recognition", "OCR", "PADDLEOCR_CRNN_REC", now),
+                descriptor("mobilenet-classifier", "MobileNet", "v3-large", "image-classification", "IMAGE_CLASSIFICATION", "TORCHVISION_CLASSIFY", now),
+                descriptor("resnet50-classifier", "ResNet50", "v1.5", "image-classification", "IMAGE_CLASSIFICATION", "TORCHVISION_CLASSIFY", now),
+                descriptor("bert-base", "BERT", "base-chinese", "semantic-analysis", "SEMANTIC_ANALYSIS", "TRANSFORMERS_NLP", now),
+                descriptor("lstm-sentiment", "LSTM", "1.2", "sentiment-analysis", "SEMANTIC_ANALYSIS", "TRANSFORMERS_NLP", now),
+                descriptor("gru-classifier", "GRU", "1.0", "text-classification", "SEMANTIC_ANALYSIS", "TRANSFORMERS_NLP", now),
+                descriptor("transformer-base", "Transformer", "base", "semantic-analysis", "SEMANTIC_ANALYSIS", "TRANSFORMERS_NLP", now),
+                descriptor("roberta-chinese", "RoBERTa", "chinese-wwm", "semantic-analysis", "SEMANTIC_ANALYSIS", "TRANSFORMERS_NLP", now),
+                descriptor("deepspeech2", "DeepSpeech", "2.0", "speech-to-text", "SPEECH_RECOGNITION", "ASR_SPEECH_TO_TEXT", now),
+                descriptor("whisper-demo", "Whisper", "large-v3", "speech-to-text", "SPEECH_RECOGNITION", "ASR_SPEECH_TO_TEXT", now),
+                descriptor("qwen-vl", "Qwen-VL", "1.5", "vision-language", "VISION_LANGUAGE", "VLM_CHAT", now),
+                descriptor("yi-vl", "Yi-VL", "6B", "vision-language", "VISION_LANGUAGE", "VLM_CHAT", now),
+                descriptor("visualglm", "VisualGLM", "6B", "vision-language", "VISION_LANGUAGE", "VLM_CHAT", now),
+                descriptor("custom-model-v1", "Party-A Custom Model", "1.0.0", "custom", "CUSTOM", "CUSTOM_JSON_PROCESS", now),
+                descriptor("custom-finetuned", "Fine-tuned Improved Model", "2.1.0", "custom-finetuned", "CUSTOM", "CUSTOM_JSON_PROCESS", now)
+        );
+    }
+
+    private ModelDescriptor descriptor(String id, String name, String version, String algorithmType, String category,
+                                       String adapterType, long now) {
+        AdapterPreset preset = resolvePreset(adapterType, category);
+        return ModelDescriptor.builder()
+                .modelId(id)
+                .modelName(name)
+                .version(version)
+                .activeVersion(version)
+                .algorithmType(algorithmType)
+                .deploymentStatus("RUNNING")
+                .supportedModalities(preset.getSupportedModalities())
+                .todo("Built-in adapter preset: " + preset.getDisplayName() + ". Real weights require runtimeCommand/packageUri.")
                 .invocationCount(0)
                 .averageLatency(0.0)
-                .modelCategory("UNCLASSIFIED")
-                .availableMetrics(List.of("Latency", "Throughput"))
-                .isCustom(false)
+                .modelCategory(category)
+                .availableMetrics(preset.getMetrics())
+                .isCustom(category.equals("CUSTOM"))
+                .runtimeCommand(null)
+                .packageUri("demo://local/" + id)
+                .adapterType(preset.getAdapterType())
+                .adapterStatus("DEMO")
+                .adapterConfig(preset.getDefaultConfig())
+                .datasetFormats(preset.getDatasetFormats())
+                .outputSchema(preset.getOutputSchema())
+                .updatedAt(now)
                 .build();
+    }
+
+    private AdapterPreset resolvePreset(String adapterType, String modelCategory) {
+        String target = adapterType;
+        if (target == null || target.isBlank()) {
+            target = switch (modelCategory == null ? "" : modelCategory) {
+                case "OBJECT_DETECTION" -> "YOLO_DETECT";
+                case "OCR" -> "PADDLEOCR_DB_DET";
+                case "IMAGE_CLASSIFICATION" -> "TORCHVISION_CLASSIFY";
+                case "SEMANTIC_ANALYSIS" -> "TRANSFORMERS_NLP";
+                case "SPEECH_RECOGNITION" -> "ASR_SPEECH_TO_TEXT";
+                case "VISION_LANGUAGE" -> "VLM_CHAT";
+                default -> "CUSTOM_JSON_PROCESS";
+            };
+        }
+        final String resolved = target;
+        return adapterPresetService.listPresets().stream()
+                .filter(item -> item.getAdapterType().equals(resolved) || item.getPresetId().equals(resolved))
+                .findFirst()
+                .orElseGet(() -> adapterPresetService.findPreset("CUSTOM_JSON_PROCESS"));
+    }
+
+    private String inferAdapterStatus(ModelLifecycleRequest request, AdapterPreset preset) {
+        if (request.getRuntimeCommand() != null && !request.getRuntimeCommand().isBlank()) {
+            return "REAL";
+        }
+        return preset.getAdapterStatus();
     }
 }

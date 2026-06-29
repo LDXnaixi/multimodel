@@ -11,6 +11,7 @@
         <button class="btn btn-success" @click="exportReport('CSV')">导出 CSV</button>
         <button class="btn btn-success" @click="exportReport('JSON')">导出 JSON</button>
         <button class="btn btn-success" @click="exportReport('XML')">导出 XML</button>
+        <button class="btn btn-success" @click="exportReport('PDF')">导出 PDF</button>
       </div>
     </div>
 

@@ -19,15 +19,15 @@ class WebSocketService {
   private maxReconnectAttempts = 10
   private baseReconnectDelay = 1000
   private subscribedTaskId: string | null = null
+  private listeners = new Map<string, Set<(payload: unknown) => void>>()
 
   connect(taskId?: string) {
     if (this.socket) {
       this.socket.close()
     }
 
-    const wsUrl = import.meta.env.DEV
-      ? `ws://${location.host}/ws/progress`
-      : `ws://localhost:8080/ws/progress`
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${location.host}/ws/progress`
 
     this.socket = new WebSocket(wsUrl)
 
@@ -67,6 +67,7 @@ class WebSocketService {
   private handleMessage(message: WsMessage) {
     const appStore = useAppStore()
     const taskStore = useTaskStore()
+    this.listeners.get(message.type)?.forEach(listener => listener(message.payload))
 
     switch (message.type) {
       case 'SERVER_PING': {
@@ -93,6 +94,10 @@ class WebSocketService {
         console.log('数据流水线结果:', message.payload)
         break
       }
+      case 'DATA_CATALOG_CHANGED': {
+        console.log('服务器数据目录已更新:', message.payload)
+        break
+      }
       case 'RESOURCE_METRIC': {
         appStore.setLatestMetric(message.payload as any)
         break
@@ -114,6 +119,14 @@ class WebSocketService {
       requestId: `sub-${Date.now()}`,
       payload: { taskId }
     })
+  }
+
+  on(type: string, listener: (payload: unknown) => void) {
+    if (!this.listeners.has(type)) {
+      this.listeners.set(type, new Set())
+    }
+    this.listeners.get(type)!.add(listener)
+    return () => this.listeners.get(type)?.delete(listener)
   }
 
   send(message: Record<string, unknown>) {

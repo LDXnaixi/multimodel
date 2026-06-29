@@ -55,8 +55,12 @@
         </div>
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button class="btn" style="background: #f0f0f0;" @click="showCreate = false">取消</button>
+          <button class="btn btn-warning" @click="checkWorkflow">校验流程</button>
+          <button class="btn btn-success" @click="simulateWorkflow">仿真运行</button>
+          <button class="btn" style="background: #722ed1; color: #fff;" @click="saveTemplate">保存模板</button>
           <button class="btn btn-primary" @click="submitCreate">创建</button>
         </div>
+        <pre v-if="workflowResult" style="margin-top: 12px; background: #f6f8fa; padding: 12px; border-radius: 4px; max-height: 220px; overflow: auto;">{{ JSON.stringify(workflowResult, null, 2) }}</pre>
       </div>
     </div>
   </div>
@@ -65,12 +69,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { createTask, getTasks, startTask as apiStartTask } from '../services/api'
+import { createTask, getTasks, startTask as apiStartTask, validateTask, simulateTask, saveTaskTemplate } from '../services/api'
 import { useTaskStore } from '../stores/task'
 
 const router = useRouter()
 const taskStore = useTaskStore()
 const showCreate = ref(false)
+const workflowResult = ref<unknown>(null)
 
 const form = ref({
   taskName: '多模态联调测试任务',
@@ -141,6 +146,43 @@ async function submitCreate() {
     loadTasks()
   } catch (e) {
     alert('创建失败，请检查 JSON 格式')
+  }
+}
+
+function buildCreatePayload() {
+  return {
+    taskName: form.value.taskName,
+    scenarioDescription: form.value.scenarioDescription,
+    nodes: JSON.parse(form.value.nodesJson)
+  }
+}
+
+async function checkWorkflow() {
+  try {
+    workflowResult.value = await validateTask(buildCreatePayload())
+  } catch (e) {
+    alert('流程校验失败，请检查 JSON 格式')
+  }
+}
+
+async function simulateWorkflow() {
+  try {
+    workflowResult.value = await simulateTask(buildCreatePayload())
+  } catch (e) {
+    alert('流程仿真失败，请检查 JSON 格式')
+  }
+}
+
+async function saveTemplate() {
+  try {
+    workflowResult.value = await saveTaskTemplate({
+      templateName: form.value.taskName + '-模板',
+      description: form.value.scenarioDescription,
+      nodes: JSON.parse(form.value.nodesJson)
+    })
+    alert('模板已保存')
+  } catch (e) {
+    alert('保存模板失败')
   }
 }
 

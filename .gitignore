@@ -1,0 +1,32 @@
+# User-provided data and requirements
+/test/
+/甲方需求.txt
+
+# Build output and dependencies
+**/target/
+**/node_modules/
+**/dist/
+
+# Runtime data and logs
+*.log
+*.pid
+/backend/data/
+/backend/uploads/
+
+# Local configuration
+.env
+.env.*
+!.env.example
+application-local.properties
+application-local.yml
+application-local.yaml
+
+# IDE and Codex workspace state
+/.idea/
+/.vscode/
+/.agents/
+/.codex/
+
+# Operating system files
+.DS_Store
+Thumbs.db

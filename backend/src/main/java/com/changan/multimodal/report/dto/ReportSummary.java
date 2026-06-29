@@ -3,12 +3,14 @@ package com.changan.multimodal.report.dto;
 import com.changan.multimodal.monitor.dto.ResourceMetricSnapshot;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
 import java.util.List;
 import java.util.Map;
 
 @Getter
 @Builder
+@Jacksonized
 public class ReportSummary {
 
     private final String taskId;

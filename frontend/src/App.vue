@@ -11,6 +11,7 @@
         <li><router-link to="/monitor">资源监控</router-link></li>
         <li><router-link to="/reports">报告导出</router-link></li>
         <li><router-link to="/users">用户统计</router-link></li>
+        <li><router-link to="/environment">环境报告</router-link></li>
       </ul>
       <div class="ws-status">
         <span :class="['dot', appStore.wsConnected ? 'connected' : 'disconnected']"></span>
